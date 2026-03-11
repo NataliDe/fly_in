@@ -1,0 +1,12 @@
+SPACE — play/pause
+
+N — 1 наступний хід
+
+R — restart
+
+ESC — вихід
+
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install -r requirements.txt
+python3 -m fly_in.main maps/easy/01_linear_path.txt --auto

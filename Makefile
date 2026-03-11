@@ -1,19 +1,21 @@
-PY=python3
-PKG=flyin
+PYTHON=python3
+PIP=pip3
+MAP=maps/01_linear_path.txt
 
 install:
-	$(PY) -m pip install -U pip
-	$(PY) -m pip install -e ".[dev]"
+	$(PIP) install -r requirements.txt
 
 run:
-	$(PY) -m $(PKG).cli maps/01_maze_nightmare.txt --viz
+	$(PYTHON) -m fly_in.main $(MAP)
 
 debug:
-	$(PY) -m pdb -m $(PKG).cli maps/01_maze_nightmare.txt --viz
-
-lint:
-	python -m flake8 src
-	python -m mypy src
+	$(PYTHON) -m pdb -m fly_in.main $(MAP)
 
 clean:
-	rm -rf .mypy_cache __pycache__ .pytest_cache *.egg-info dist build
+	find . -type d -name "__pycache__" -prune -exec rm -rf {} +
+	find . -type d -name ".mypy_cache" -prune -exec rm -rf {} +
+	find . -type d -name ".pytest_cache" -prune -exec rm -rf {} +
+
+lint:
+	flake8 .
+	mypy . --warn-return-any --warn-unused-ignores --ignore-missing-imports --disallow-untyped-defs --check-untyped-defs
