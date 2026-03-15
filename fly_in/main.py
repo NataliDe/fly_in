@@ -1,80 +1,69 @@
 from __future__ import annotations
 
-import argparse
 import sys
-from pathlib import Path
 
 import pygame
 
 from .parser import ParseError, parse_map
-from .renderer import PygameRenderer
-from .simulator import DroneSimulator
+from .renderer import FPS, Renderer
+from .simulator import Simulator
 
 
-def build_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Fly-in drone simulator with pygame")
-    parser.add_argument("map_file", help="Path to the map file")
-    parser.add_argument("--width", type=int, default=1400)
-    parser.add_argument("--height", type=int, default=900)
-    parser.add_argument("--fps", type=int, default=30)
-    parser.add_argument("--auto", action="store_true", help="Start simulation automatically")
-    return parser
+def main() -> None:
+    if len(sys.argv) < 2:
+        print("Usage: python3 -m fly_in.main path/to/map.txt [--auto] [--log]")
+        return
 
-
-def restart_simulator(map_file: str) -> tuple[DroneSimulator, object]:
-    map_data = parse_map(map_file)
-    simulator = DroneSimulator(map_data)
-    return simulator, map_data
-
-
-def main() -> int:
-    parser = build_arg_parser()
-    args = parser.parse_args()
+    map_path = sys.argv[1]
+    auto = "--auto" in sys.argv[2:]
+    show_log = "--log" in sys.argv[2:]
 
     try:
-        simulator, map_data = restart_simulator(args.map_file)
-    except (ParseError, ValueError, OSError) as exc:
-        print(f"Error: {exc}")
-        return 1
+        map_data = parse_map(map_path)
+    except (OSError, ParseError) as exc:
+        print(f"Parse error: {exc}")
+        return
 
-    pygame.init()
-    pygame.display.set_caption("Fly-in")
-    screen = pygame.display.set_mode((args.width, args.height))
-    clock = pygame.time.Clock()
-    renderer = PygameRenderer(screen, map_data)
-    auto_run = args.auto
-    step_accumulator = 0
-    running = True
+    renderer = Renderer(map_data)
+    simulator = Simulator(map_data)
+    running = auto
+    step_cooldown = 0.0
 
-    while running:
-        dt = clock.tick(args.fps)
+    while True:
+        dt = renderer.clock.tick(FPS) / 1000.0
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                running = False
-            elif event.type == pygame.KEYDOWN:
+                pygame.quit()
+                return
+            if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
+                    pygame.quit()
+                    return
+                if event.key == pygame.K_SPACE:
+                    running = not running
+                if event.key == pygame.K_r:
+                    simulator.reset()
                     running = False
-                elif event.key == pygame.K_SPACE:
-                    auto_run = not auto_run
-                elif event.key == pygame.K_n:
-                    if not simulator.is_finished():
-                        simulator.step()
-                elif event.key == pygame.K_r:
-                    simulator, map_data = restart_simulator(args.map_file)
-                    renderer = PygameRenderer(screen, map_data)
-                    step_accumulator = 0
+                    step_cooldown = 0.0
+                if event.key == pygame.K_n and not simulator.is_finished():
+                    simulator.step()
+                    if show_log and simulator.move_logs:
+                        print(" ".join(simulator.move_logs))
 
-        if auto_run and not simulator.is_finished():
-            step_accumulator += dt
-            if step_accumulator >= 600:
+        simulator.update_animation(dt)
+        nobody_moving = all((not drone.is_moving) or drone.progress >= 1.0 for drone in simulator.drones)
+
+        if running and not simulator.is_finished():
+            step_cooldown += dt
+            if nobody_moving and step_cooldown >= 0.08:
                 simulator.step()
-                step_accumulator = 0
+                if show_log and simulator.move_logs:
+                    print(" ".join(simulator.move_logs))
+                step_cooldown = 0.0
 
-        renderer.draw(simulator, auto_run)
-
-    pygame.quit()
-    return 0
+        renderer.draw(simulator, running)
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()

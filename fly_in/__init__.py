@@ -1,1 +1,1 @@
-__all__ = []
+"""Fly-in drone simulation package."""

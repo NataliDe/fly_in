@@ -1,150 +1,227 @@
 from __future__ import annotations
 
+import math
 from typing import Dict, Tuple
 
 import pygame
 
 from .models import MapData
-from .simulator import DroneSimulator
+from .simulator import Simulator
+
+SCREEN_W = 1800
+SCREEN_H = 1100
+BG_COLOR = (20, 23, 31)
+GRID_COLOR = (38, 42, 52)
+TEXT_COLOR = (235, 235, 240)
+SUBTLE_TEXT = (210, 210, 220)
+LINK_COLOR = (105, 110, 130)
+LINK_BUSY_COLOR = (255, 190, 70)
+DRONE_BODY = (28, 28, 32)
+DRONE_TEXT = (255, 255, 255)
+DEFAULT_SCALE = 90
+FPS = 60
+TOP_UI_HEIGHT = 150
+MAP_MARGIN_X = 120
+MAP_MARGIN_Y = 80
+Y_SPACING_FACTOR = 3.0
 
 
-COLOR_MAP: Dict[str, Tuple[int, int, int]] = {
-    "none": (180, 180, 180),
-    "green": (46, 204, 113),
-    "red": (231, 76, 60),
-    "blue": (52, 152, 219),
-    "yellow": (241, 196, 15),
-    "orange": (243, 156, 18),
-    "purple": (155, 89, 182),
-    "cyan": (26, 188, 156),
-    "black": (44, 62, 80),
-    "brown": (141, 110, 99),
-    "gray": (127, 140, 141),
-    "grey": (127, 140, 141),
-    "gold": (212, 175, 55),
-    "maroon": (128, 0, 0),
-    "darkred": (139, 0, 0),
-    "violet": (142, 68, 173),
-    "crimson": (220, 20, 60),
-    "lime": (50, 205, 50),
-    "magenta": (255, 0, 255),
-    "rainbow": (255, 105, 180),
-}
+def color_from_name(name: str, kind: str, zone: str) -> Tuple[int, int, int]:
+    palette = {
+        "green": (60, 210, 90),
+        "red": (220, 60, 60),
+        "blue": (70, 140, 255),
+        "yellow": (245, 220, 70),
+        "orange": (255, 145, 50),
+        "purple": (170, 95, 255),
+        "cyan": (70, 220, 220),
+        "black": (35, 35, 35),
+        "brown": (130, 90, 50),
+        "gold": (240, 190, 60),
+        "maroon": (120, 40, 60),
+        "darkred": (130, 20, 20),
+        "violet": (170, 100, 220),
+        "crimson": (200, 30, 80),
+        "lime": (140, 220, 60),
+        "magenta": (220, 80, 200),
+        "rainbow": (255, 255, 255),
+        "none": (190, 190, 190),
+    }
+    if name in palette:
+        return palette[name]
+    if kind == "start":
+        return (60, 210, 90)
+    if kind == "end":
+        return (220, 80, 80)
+    if zone == "restricted":
+        return (180, 120, 80)
+    if zone == "priority":
+        return (80, 220, 220)
+    if zone == "blocked":
+        return (35, 35, 35)
+    return (180, 180, 190)
 
-BACKGROUND = (245, 247, 250)
-TEXT = (33, 37, 41)
-EDGE = (130, 140, 150)
-DRONE = (25, 25, 25)
-PANEL = (255, 255, 255)
 
+class Renderer:
+    """Pygame renderer for the simulation."""
 
-class PygameRenderer:
-    def __init__(self, screen: pygame.Surface, map_data: MapData) -> None:
-        self.screen = screen
+    def __init__(self, map_data: MapData) -> None:
+        pygame.init()
+        pygame.display.set_caption("Fly-in Drone Simulation")
+        self.screen = pygame.display.set_mode((SCREEN_W, SCREEN_H))
+        self.clock = pygame.time.Clock()
         self.map_data = map_data
-        self.font = pygame.font.SysFont("arial", 18)
-        self.small_font = pygame.font.SysFont("arial", 14)
-        self.big_font = pygame.font.SysFont("arial", 24, bold=True)
-        self.margin_x = 90
-        self.margin_y = 90
-        self.cell = 70
-        self.panel_width = 320
+        self.font_small = pygame.font.SysFont("arial", 20, bold=False)
+        self.font = pygame.font.SysFont("arial", 26, bold=True)
+        self.font_big = pygame.font.SysFont("arial", 34, bold=True)
+        self.font_caps = pygame.font.SysFont("arial", 18, bold=True)
+        self.scale = DEFAULT_SCALE
+        self.offset_x = SCREEN_W // 2
+        self.offset_y = (TOP_UI_HEIGHT + SCREEN_H) // 2
+        self._recalculate_view()
 
-    def _world_to_screen(self, x: int, y: int) -> Tuple[int, int]:
-        return self.margin_x + x * self.cell, self.screen.get_height() // 2 - y * self.cell
+    def _recalculate_view(self) -> None:
+        xs = [hub.x for hub in self.map_data.hubs.values()]
+        ys = [hub.y for hub in self.map_data.hubs.values()]
+        if not xs or not ys:
+            return
 
-    def _hub_color(self, color_name: str, zone_type: str) -> Tuple[int, int, int]:
-        if color_name in COLOR_MAP:
-            return COLOR_MAP[color_name]
-        if zone_type == "restricted":
-            return (210, 140, 70)
-        if zone_type == "priority":
-            return (70, 170, 240)
-        if zone_type == "blocked":
-            return (90, 90, 90)
-        return COLOR_MAP["none"]
+        min_x = min(xs)
+        max_x = max(xs)
+        min_y = min(ys)
+        max_y = max(ys)
 
-    def draw(self, simulator: DroneSimulator, auto_run: bool) -> None:
-        self.screen.fill(BACKGROUND)
-        self._draw_connections()
-        self._draw_hubs(simulator)
-        self._draw_transit(simulator)
-        self._draw_side_panel(simulator, auto_run)
-        pygame.display.flip()
+        span_x = max(1, max_x - min_x)
+        span_y = max(1, max_y - min_y)
 
-    def _draw_connections(self) -> None:
-        for connection in self.map_data.connections.values():
-            a = self.map_data.hubs[connection.a]
-            b = self.map_data.hubs[connection.b]
-            ax, ay = self._world_to_screen(a.x, a.y)
-            bx, by = self._world_to_screen(b.x, b.y)
-            pygame.draw.line(self.screen, EDGE, (ax, ay), (bx, by), 3)
-            mid_x = (ax + bx) // 2
-            mid_y = (ay + by) // 2
-            cap_text = self.small_font.render(str(connection.max_link_capacity), True, TEXT)
-            self.screen.blit(cap_text, (mid_x + 4, mid_y + 4))
+        available_w = SCREEN_W - MAP_MARGIN_X * 2
+        available_h = SCREEN_H - TOP_UI_HEIGHT - MAP_MARGIN_Y * 2
+        scale_x = available_w / max(1, span_x)
+        scale_y = available_h / max(1, span_y * Y_SPACING_FACTOR)
+        self.scale = max(36, min(DEFAULT_SCALE, int(min(scale_x, scale_y))))
 
-    def _draw_hubs(self, simulator: DroneSimulator) -> None:
-        occupancy = simulator.hub_occupancy()
+        map_pixel_w = span_x * self.scale
+        map_pixel_h = span_y * self.scale * Y_SPACING_FACTOR
+        self.offset_x = int((SCREEN_W - map_pixel_w) / 2 - min_x * self.scale)
+        self.offset_y = int(
+            TOP_UI_HEIGHT
+            + (available_h - map_pixel_h) / 2
+            + max_y * self.scale * Y_SPACING_FACTOR
+            + MAP_MARGIN_Y
+        )
+
+    def world_to_screen(self, x: float, y: float) -> Tuple[int, int]:
+        return (
+            int(self.offset_x + x * self.scale),
+            int(self.offset_y - y * self.scale * Y_SPACING_FACTOR),
+        )
+
+    def draw_grid(self) -> None:
+        for x in range(0, SCREEN_W, 50):
+            pygame.draw.line(self.screen, GRID_COLOR, (x, TOP_UI_HEIGHT), (x, SCREEN_H), 1)
+        for y in range(TOP_UI_HEIGHT, SCREEN_H, 50):
+            pygame.draw.line(self.screen, GRID_COLOR, (0, y), (SCREEN_W, y), 1)
+
+    def draw_links(self, sim: Simulator) -> None:
+        busy_keys = set()
+        for drone in sim.drones:
+            key = drone.active_connection_key()
+            if key is not None:
+                busy_keys.add(key)
+
+        for key, conn in self.map_data.connections.items():
+            a = self.map_data.hubs[conn.a]
+            b = self.map_data.hubs[conn.b]
+            p1 = self.world_to_screen(a.x, a.y)
+            p2 = self.world_to_screen(b.x, b.y)
+            color = LINK_BUSY_COLOR if key in busy_keys else LINK_COLOR
+            width = 7 if key in busy_keys else 4
+            pygame.draw.line(self.screen, color, p1, p2, width)
+            mx = (p1[0] + p2[0]) // 2
+            my = (p1[1] + p2[1]) // 2
+            box = pygame.Rect(mx - 16, my - 15, 32, 28)
+            pygame.draw.rect(self.screen, BG_COLOR, box, border_radius=8)
+            pygame.draw.rect(self.screen, color, box, 2, border_radius=8)
+            cap_text = self.font_caps.render(str(conn.max_link_capacity), True, TEXT_COLOR)
+            self.screen.blit(cap_text, (mx - cap_text.get_width() // 2, my - cap_text.get_height() // 2))
+
+    def draw_hubs(self, sim: Simulator) -> None:
+        occupancy = {name: 0 for name in self.map_data.hubs}
+        for drone in sim.drones:
+            if not drone.is_moving:
+                occupancy[drone.current_hub] += 1
+
         for hub in self.map_data.hubs.values():
-            sx, sy = self._world_to_screen(hub.x, hub.y)
-            radius = 22 if hub.kind == "hub" else 28
-            color = self._hub_color(hub.color, hub.zone_type)
-            pygame.draw.circle(self.screen, color, (sx, sy), radius)
-            pygame.draw.circle(self.screen, TEXT, (sx, sy), radius, 2)
-            label = self.small_font.render(hub.name, True, TEXT)
-            self.screen.blit(label, (sx - label.get_width() // 2, sy + radius + 6))
-            occ_value = occupancy.get(hub.name, 0)
-            occ_text = self.small_font.render(
-                f"{occ_value}/{hub.max_drones}" if hub.kind == "hub" else str(occ_value),
-                True,
-                TEXT,
+            pos = self.world_to_screen(hub.x, hub.y)
+            color = color_from_name(hub.color, hub.kind, hub.zone_type)
+            radius = 34 if hub.kind in {"start", "end"} else 28
+            pygame.draw.circle(self.screen, color, pos, radius)
+            pygame.draw.circle(self.screen, (12, 12, 15), pos, radius, 4)
+
+            cap_display = "∞" if hub.kind in {"start", "end"} else str(hub.max_drones)
+            cap_surf = self.font.render(cap_display, True, (10, 10, 14))
+            self.screen.blit(
+                cap_surf,
+                (pos[0] - cap_surf.get_width() // 2, pos[1] - cap_surf.get_height() // 2),
             )
-            self.screen.blit(occ_text, (sx - occ_text.get_width() // 2, sy - 9))
-            if hub.zone_type == "blocked":
-                pygame.draw.line(self.screen, (255, 255, 255), (sx - 10, sy - 10), (sx + 10, sy + 10), 3)
-                pygame.draw.line(self.screen, (255, 255, 255), (sx + 10, sy - 10), (sx - 10, sy + 10), 3)
 
-    def _draw_transit(self, simulator: DroneSimulator) -> None:
-        for moving in simulator.moving_sprites():
-            start_hub = self.map_data.hubs[moving.start]
-            end_hub = self.map_data.hubs[moving.end]
-            sx, sy = self._world_to_screen(start_hub.x, start_hub.y)
-            ex, ey = self._world_to_screen(end_hub.x, end_hub.y)
-            x = sx + (ex - sx) * moving.progress
-            y = sy + (ey - sy) * moving.progress
-            pygame.draw.circle(self.screen, DRONE, (int(x), int(y)), 8)
-            tag = self.small_font.render(str(moving.drone_id), True, (255, 255, 255))
-            self.screen.blit(tag, (int(x) - tag.get_width() // 2, int(y) - tag.get_height() // 2))
+            occ_text = self.font_small.render(f"{occupancy[hub.name]}", True, SUBTLE_TEXT)
+            occ_bg = pygame.Rect(pos[0] - 16, pos[1] + radius + 6, 32, 24)
+            pygame.draw.rect(self.screen, BG_COLOR, occ_bg, border_radius=8)
+            pygame.draw.rect(self.screen, color, occ_bg, 2, border_radius=8)
+            self.screen.blit(
+                occ_text,
+                (occ_bg.centerx - occ_text.get_width() // 2, occ_bg.centery - occ_text.get_height() // 2),
+            )
 
-    def _draw_side_panel(self, simulator: DroneSimulator, auto_run: bool) -> None:
-        x = self.screen.get_width() - self.panel_width
-        panel_rect = pygame.Rect(x, 0, self.panel_width, self.screen.get_height())
-        pygame.draw.rect(self.screen, PANEL, panel_rect)
-        pygame.draw.line(self.screen, EDGE, (x, 0), (x, self.screen.get_height()), 2)
+    def draw_drones(self, sim: Simulator) -> None:
+        parked_count: Dict[str, int] = {name: 0 for name in self.map_data.hubs}
+        for drone in sim.drones:
+            if drone.is_moving and drone.from_hub and drone.to_hub:
+                a = self.map_data.hubs[drone.from_hub]
+                b = self.map_data.hubs[drone.to_hub]
+                p1 = self.world_to_screen(a.x, a.y)
+                p2 = self.world_to_screen(b.x, b.y)
+                x = p1[0] + (p2[0] - p1[0]) * drone.progress
+                y = p1[1] + (p2[1] - p1[1]) * drone.progress
+            else:
+                hub = self.map_data.hubs[drone.current_hub]
+                base_x, base_y = self.world_to_screen(hub.x, hub.y)
+                index = parked_count[drone.current_hub]
+                parked_count[drone.current_hub] += 1
+                angle = index * 0.95
+                radius = 14 + (index // 6) * 12
+                x = base_x + math.cos(angle) * radius
+                y = base_y + math.sin(angle) * radius
 
-        y = 24
+            pygame.draw.circle(self.screen, (255, 255, 255), (int(x), int(y)), 14)
+            pygame.draw.circle(self.screen, DRONE_BODY, (int(x), int(y)), 12)
+            text = self.font_caps.render(str(drone.drone_id), True, DRONE_TEXT)
+            self.screen.blit(text, (int(x) - text.get_width() // 2, int(y) - text.get_height() // 2))
+
+    def draw_ui(self, sim: Simulator, running: bool) -> None:
+        title = self.font_big.render(self.map_data.title, True, TEXT_COLOR)
+        self.screen.blit(title, (24, 18))
         lines = [
-            self.big_font.render("Fly-in", True, TEXT),
-            self.font.render(self.map_data.title, True, TEXT),
-            self.font.render(f"Turn: {simulator.turn}", True, TEXT),
-            self.font.render(f"Delivered: {simulator.delivered_count()}/{len(simulator.drones)}", True, TEXT),
-            self.font.render(f"Auto-run: {'ON' if auto_run else 'OFF'}", True, TEXT),
-            self.font.render("Keys:", True, TEXT),
-            self.small_font.render("SPACE - play/pause", True, TEXT),
-            self.small_font.render("N - next turn", True, TEXT),
-            self.small_font.render("R - restart", True, TEXT),
-            self.small_font.render("ESC - quit", True, TEXT),
-            self.font.render("Last turn moves:", True, TEXT),
+            f"Turn: {sim.turn}",
+            f"Delivered: {sim.finished_count}/{len(sim.drones)}",
+            f"State: {'RUNNING' if running else 'PAUSED'}",
+            "Keys: SPACE play/pause | N next turn | R restart | ESC exit",
+            "On hubs: big number = capacity, small bottom number = drones inside, on links = link capacity",
         ]
-        for surface in lines:
-            self.screen.blit(surface, (x + 18, y))
-            y += surface.get_height() + 8
+        y = 60
+        for line in lines:
+            surf = self.font_small.render(line, True, TEXT_COLOR)
+            self.screen.blit(surf, (24, y))
+            y += 24
 
-        last_moves = simulator.logs[-1].moves if simulator.logs else []
-        if not last_moves:
-            last_moves = ["No moves yet"]
-        for move in last_moves[-15:]:
-            txt = self.small_font.render(move, True, TEXT)
-            self.screen.blit(txt, (x + 18, y))
-            y += txt.get_height() + 4
+        pygame.draw.line(self.screen, GRID_COLOR, (0, TOP_UI_HEIGHT - 6), (SCREEN_W, TOP_UI_HEIGHT - 6), 2)
+
+    def draw(self, sim: Simulator, running: bool) -> None:
+        self.screen.fill(BG_COLOR)
+        self.draw_grid()
+        self.draw_links(sim)
+        self.draw_hubs(sim)
+        self.draw_drones(sim)
+        self.draw_ui(sim, running)
+        pygame.display.flip()
