@@ -16,9 +16,9 @@ LINK_COLOR = (105, 110, 130)
 LINK_BUSY_COLOR = (255, 190, 70)
 DRONE_BODY = (28, 28, 32)
 DRONE_TEXT = (255, 255, 255)
-DEFAULT_SCALE = 110
+DEFAULT_SCALE = 90
 FPS = 60
-TOP_UI_HEIGHT = 210
+TOP_UI_HEIGHT = 150
 MAP_MARGIN_X = 120
 MAP_MARGIN_Y = 80
 Y_SPACING_FACTOR = 3.0
@@ -116,7 +116,8 @@ class Renderer:
 
     def draw_grid(self) -> None:
         for x in range(0, SCREEN_W, 50):
-            pygame.draw.line(self.screen, GRID_COLOR, (x, TOP_UI_HEIGHT), (x, SCREEN_H), 1)
+            pygame.draw.line(self.screen, GRID_COLOR, (
+                x, TOP_UI_HEIGHT), (x, SCREEN_H), 1)
         for y in range(TOP_UI_HEIGHT, SCREEN_H, 50):
             pygame.draw.line(self.screen, GRID_COLOR, (0, y), (SCREEN_W, y), 1)
 
@@ -140,8 +141,11 @@ class Renderer:
             box = pygame.Rect(mx - 16, my - 15, 32, 28)
             pygame.draw.rect(self.screen, BG_COLOR, box, border_radius=8)
             pygame.draw.rect(self.screen, color, box, 2, border_radius=8)
-            cap_text = self.font_caps.render(str(conn.max_link_capacity), True, TEXT_COLOR)
-            self.screen.blit(cap_text, (mx - cap_text.get_width() // 2, my - cap_text.get_height() // 2))
+            cap_text = self.font_caps.render(str(
+                conn.max_link_capacity), True, TEXT_COLOR)
+            self.screen.blit(cap_text, (
+                mx - cap_text.get_width() // 2,
+                my - cap_text.get_height() // 2))
 
     def draw_hubs(self, sim: Simulator) -> None:
         occupancy = {name: 0 for name in self.map_data.hubs}
@@ -156,20 +160,24 @@ class Renderer:
             pygame.draw.circle(self.screen, color, pos, radius)
             pygame.draw.circle(self.screen, (12, 12, 15), pos, radius, 4)
 
-            cap_display = "∞" if hub.kind in {"start", "end"} else str(hub.max_drones)
+            cap_display = "∞" if hub.kind in {
+                "start", "end"} else str(hub.max_drones)
             cap_surf = self.font.render(cap_display, True, (10, 10, 14))
             self.screen.blit(
                 cap_surf,
-                (pos[0] - cap_surf.get_width() // 2, pos[1] - cap_surf.get_height() // 2),
+                (pos[0] - cap_surf.get_width() // 2,
+                 pos[1] - cap_surf.get_height() // 2),
             )
 
-            occ_text = self.font_small.render(f"{occupancy[hub.name]}", True, SUBTLE_TEXT)
+            occ_text = self.font_small.render(f"{occupancy[hub.name]}",
+                                              True, SUBTLE_TEXT)
             occ_bg = pygame.Rect(pos[0] - 16, pos[1] + radius + 6, 32, 24)
             pygame.draw.rect(self.screen, BG_COLOR, occ_bg, border_radius=8)
             pygame.draw.rect(self.screen, color, occ_bg, 2, border_radius=8)
             self.screen.blit(
                 occ_text,
-                (occ_bg.centerx - occ_text.get_width() // 2, occ_bg.centery - occ_text.get_height() // 2),
+                (occ_bg.centerx - occ_text.get_width() // 2,
+                 occ_bg.centery - occ_text.get_height() // 2),
             )
 
     def draw_drones(self, sim: Simulator) -> None:
@@ -192,10 +200,12 @@ class Renderer:
                 x = base_x + math.cos(angle) * radius
                 y = base_y + math.sin(angle) * radius
 
-            pygame.draw.circle(self.screen, (255, 255, 255), (int(x), int(y)), 14)
+            pygame.draw.circle(self.screen, (255, 255, 255),
+                               (int(x), int(y)), 14)
             pygame.draw.circle(self.screen, DRONE_BODY, (int(x), int(y)), 12)
             text = self.font_caps.render(str(drone.drone_id), True, DRONE_TEXT)
-            self.screen.blit(text, (int(x) - text.get_width() // 2, int(y) - text.get_height() // 2))
+            self.screen.blit(text, (int(x) - text.get_width() // 2,
+                                    int(y) - text.get_height() // 2))
 
     def draw_ui(self, sim: Simulator, running: bool) -> None:
         title = self.font_big.render(self.map_data.title, True, TEXT_COLOR)
@@ -205,7 +215,8 @@ class Renderer:
             f"Delivered: {sim.finished_count}/{len(sim.drones)}",
             f"State: {'RUNNING' if running else 'PAUSED'}",
             "Keys: SPACE play/pause | N next turn | R restart | ESC exit",
-            "On hubs: big number = capacity, small bottom number = drones inside, on links = link capacity",
+            "On hubs: big number = capacity,"
+            "small bottom number = drones inside, on links = link capacity",
         ]
         y = 60
         for line in lines:
@@ -213,7 +224,8 @@ class Renderer:
             self.screen.blit(surf, (24, y))
             y += 24
 
-        pygame.draw.line(self.screen, GRID_COLOR, (0, TOP_UI_HEIGHT - 6), (SCREEN_W, TOP_UI_HEIGHT - 6), 2)
+        pygame.draw.line(self.screen, GRID_COLOR, (0, TOP_UI_HEIGHT - 6),
+                         (SCREEN_W, TOP_UI_HEIGHT - 6), 2)
 
     def draw(self, sim: Simulator, running: bool) -> None:
         self.screen.fill(BG_COLOR)

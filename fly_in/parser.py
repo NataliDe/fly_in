@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
@@ -17,7 +15,7 @@ def _remove_comment(line: str) -> str:
 
 
 def _split_main_and_meta(line: str) -> tuple[str, str]:
-    if "[" in line:
+    if "[" in line:  # Розділення основної частини і метаданих
         left, right = line.split("[", 1)
         return left.strip(), right.strip()
     return line.strip(), ""
@@ -38,15 +36,18 @@ def _parse_metadata(meta_text: str, line_number: int) -> Dict[str, str]:
 
     for item in inner.split():
         if "=" not in item:
-            raise ParseError(f"line {line_number}: invalid metadata entry '{item}'")
+            raise ParseError(
+                f"line {line_number}: invalid metadata entry '{item}'")
         key, value = item.split("=", 1)
         if not key or not value:
-            raise ParseError(f"line {line_number}: invalid metadata entry '{item}'")
+            raise ParseError(
+                f"line {line_number}: invalid metadata entry '{item}'")
         result[key.strip()] = value.strip()
     return result
 
 
-def _parse_hub_line(line: str, line_number: int) -> tuple[str, str, str, str, Dict[str, str]]:
+def _parse_hub_line(line: str, line_number: int) -> tuple[str, str, str, str,
+                                                          Dict[str, str]]:
     main_part, meta_text = _split_main_and_meta(line)
     prefix, sep, rest = main_part.partition(":")
     if sep == "":
@@ -65,10 +66,13 @@ def _parse_hub_line(line: str, line_number: int) -> tuple[str, str, str, str, Di
     if "-" in name or " " in name:
         raise ParseError(f"line {line_number}: invalid hub name '{name}'")
 
-    return prefix, name, x_text, y_text, _parse_metadata(meta_text, line_number)
+    return prefix, name, x_text, y_text, _parse_metadata(meta_text,
+                                                         line_number)
 
 
-def _parse_connection_line(line: str, line_number: int) -> tuple[str, str, Dict[str, str]]:
+def _parse_connection_line(line: str,
+                           line_number: int) -> tuple[str, str,
+                                                      Dict[str, str]]:
     main_part, meta_text = _split_main_and_meta(line)
     prefix, sep, rest = main_part.partition(":")
     if sep == "" or prefix.strip() != "connection":
@@ -112,10 +116,12 @@ def parse_map(path: str | Path) -> MapData:
 
         if line.startswith("nb_drones:"):
             if nb_drones is not None:
-                raise ParseError(f"line {index}: nb_drones declared more than once")
+                raise ParseError(
+                    f"line {index}: nb_drones declared more than once")
             value = line.split(":", 1)[1].strip()
             if not value.isdigit() or int(value) <= 0:
-                raise ParseError(f"line {index}: nb_drones must be a positive integer")
+                raise ParseError(
+                    f"line {index}: nb_drones must be a positive integer")
             nb_drones = int(value)
             continue
 
@@ -128,15 +134,18 @@ def parse_map(path: str | Path) -> MapData:
                 x = int(x_text)
                 y = int(y_text)
             except ValueError as exc:
-                raise ParseError(f"line {index}: coordinates must be integers") from exc
+                raise ParseError(
+                    f"line {index}: coordinates must be integers") from exc
 
             zone_type = meta.get("zone", "normal")
             if zone_type not in ZONE_TYPES:
-                raise ParseError(f"line {index}: invalid zone type '{zone_type}'")
+                raise ParseError(
+                    f"line {index}: invalid zone type '{zone_type}'")
 
             max_drones_text = meta.get("max_drones", "1")
             if not max_drones_text.isdigit() or int(max_drones_text) <= 0:
-                raise ParseError(f"line {index}: max_drones must be a positive integer")
+                raise ParseError(
+                    f"line {index}: max_drones must be a positive integer")
 
             kind = "hub"
             if prefix == "start_hub":
@@ -156,30 +165,36 @@ def parse_map(path: str | Path) -> MapData:
 
             if kind == "start":
                 if start_name is not None:
-                    raise ParseError(f"line {index}: multiple start hubs declared")
+                    raise ParseError(
+                        f"line {index}: multiple start hubs declared")
                 start_name = name
             if kind == "end":
                 if end_name is not None:
-                    raise ParseError(f"line {index}: multiple end hubs declared")
+                    raise ParseError(
+                        f"line {index}: multiple end hubs declared")
                 end_name = name
             continue
 
         if line.startswith("connection:"):
             a, b, meta = _parse_connection_line(line, index)
             if a not in hubs or b not in hubs:
-                raise ParseError(f"line {index}: connection uses undefined hubs")
+                raise ParseError(
+                    f"line {index}: connection uses undefined hubs")
 
             key = tuple(sorted((a, b)))
             if key in connections:
-                raise ParseError(f"line {index}: duplicate connection '{a}-{b}'")
+                raise ParseError(
+                    f"line {index}: duplicate connection '{a}-{b}'")
 
             max_link_text = meta.get("max_link_capacity", "1")
             if not max_link_text.isdigit() or int(max_link_text) <= 0:
                 raise ParseError(
-                    f"line {index}: max_link_capacity must be a positive integer"
+                    f"line {index}: max_link_capacity"
+                    f" must be a positive integer"
                 )
 
-            connection = Connection(a=a, b=b, max_link_capacity=int(max_link_text))
+            connection = Connection(a=a, b=b,
+                                    max_link_capacity=int(max_link_text))
             connections[key] = connection
             hubs[a].neighbors.append(b)
             hubs[b].neighbors.append(a)

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import heapq
 import math
 from dataclasses import dataclass
@@ -24,7 +22,8 @@ class Planner:
         self.base_distance = self._build_reverse_distances()
 
     def _build_reverse_distances(self) -> Dict[str, float]:
-        dist: Dict[str, float] = {name: math.inf for name in self.map_data.hubs}
+        dist: Dict[str, float] = {
+            name: math.inf for name in self.map_data.hubs}
         goal = self.map_data.end_name
         dist[goal] = 0.0
         heap: List[Tuple[float, str]] = [(0.0, goal)]
@@ -92,11 +91,13 @@ class Planner:
             if self.base_distance[neighbor_name] == math.inf:
                 continue
 
-            future_occ = occupancy[neighbor_name] + incoming[neighbor_name] + reserved_targets.get(neighbor_name, 0)
+            future_occ = occupancy[neighbor_name] + incoming[
+                neighbor_name] + reserved_targets.get(neighbor_name, 0)
             cap = max(1, neighbor.effective_capacity())
             future_link = link_load[key] + reserved_links.get(key, 0)
 
-            score = float(neighbor.travel_cost()) + self.base_distance[neighbor_name]
+            score = float(neighbor.travel_cost()) + self.base_distance[
+                neighbor_name]
             if neighbor.zone_type == "priority":
                 score -= 0.35
 

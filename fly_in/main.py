@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import sys
 
 import pygame
@@ -52,7 +50,9 @@ def main() -> None:
                         print(" ".join(simulator.move_logs))
 
         simulator.update_animation(dt)
-        nobody_moving = all((not drone.is_moving) or drone.progress >= 1.0 for drone in simulator.drones)
+        nobody_moving = all((not drone.is_moving)
+                            or drone.progress >= 1.0
+                            for drone in simulator.drones)
 
         if running and not simulator.is_finished():
             step_cooldown += dt
