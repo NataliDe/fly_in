@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import math
 from typing import Dict, Tuple
 
@@ -18,9 +16,9 @@ LINK_COLOR = (105, 110, 130)
 LINK_BUSY_COLOR = (255, 190, 70)
 DRONE_BODY = (28, 28, 32)
 DRONE_TEXT = (255, 255, 255)
-DEFAULT_SCALE = 90
+DEFAULT_SCALE = 110
 FPS = 60
-TOP_UI_HEIGHT = 150
+TOP_UI_HEIGHT = 210
 MAP_MARGIN_X = 120
 MAP_MARGIN_Y = 80
 Y_SPACING_FACTOR = 3.0
