@@ -64,6 +64,7 @@ class Simulator:
         drone.progress = 0.0
         drone.move_duration = MOVE_TIME_PER_TURN * drone.total_move_turns
 
+        '''
         if drone.remaining_turns == 1:
             drone.last_hub = current
             drone.current_hub = next_hub_name
@@ -75,6 +76,7 @@ class Simulator:
                 drone.finished = True
                 self.finished_count += 1
             return f"{drone.name()}-{next_hub_name}"
+            '''
 
         return ""
 
@@ -99,17 +101,18 @@ class Simulator:
         if self.is_finished():
             return
 
-        self.turn += 1
         turn_moves: List[str] = []
 
+        # Спочатку дозавершуємо рухи з попереднього ходу
         for drone in self.drones:
             if not drone.is_moving:
                 continue
             drone.remaining_turns -= 1
             if (
                 drone.remaining_turns <= 0
-                    and drone.to_hub is not None
-                    and drone.from_hub is not None):
+                and drone.to_hub is not None
+                and drone.from_hub is not None
+            ):
                 origin = drone.from_hub
                 drone.current_hub = drone.to_hub
                 drone.last_hub = origin
@@ -122,6 +125,13 @@ class Simulator:
                     drone.finished = True
                     self.finished_count += 1
                 turn_moves.append(f"{drone.name()}-{drone.current_hub}")
+
+        # Якщо всі вже прибули, не відкриваємо ще один новий хід
+        if self.is_finished():
+            self.move_logs = turn_moves
+            return
+
+        self.turn += 1
 
         occupancy = self._hub_occupancy()
         incoming = self._incoming_counts()

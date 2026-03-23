@@ -18,7 +18,7 @@ DRONE_BODY = (28, 28, 32)
 DRONE_TEXT = (255, 255, 255)
 DEFAULT_SCALE = 90
 FPS = 60
-TOP_UI_HEIGHT = 150
+TOP_UI_HEIGHT = 210
 MAP_MARGIN_X = 120
 MAP_MARGIN_Y = 80
 Y_SPACING_FACTOR = 3.0
@@ -168,7 +168,7 @@ class Renderer:
                 (pos[0] - cap_surf.get_width() // 2,
                  pos[1] - cap_surf.get_height() // 2),
             )
-
+            '''
             occ_text = self.font_small.render(f"{occupancy[hub.name]}",
                                               True, SUBTLE_TEXT)
             occ_bg = pygame.Rect(pos[0] - 16, pos[1] + radius + 6, 32, 24)
@@ -179,6 +179,7 @@ class Renderer:
                 (occ_bg.centerx - occ_text.get_width() // 2,
                  occ_bg.centery - occ_text.get_height() // 2),
             )
+            '''
 
     def draw_drones(self, sim: Simulator) -> None:
         parked_count: Dict[str, int] = {name: 0 for name in self.map_data.hubs}
@@ -216,7 +217,7 @@ class Renderer:
             f"State: {'RUNNING' if running else 'PAUSED'}",
             "Keys: SPACE play/pause | N next turn | R restart | ESC exit",
             "On hubs: big number = capacity,"
-            "small bottom number = drones inside, on links = link capacity",
+            #  "small bottom number = drones inside, on links = link capacity",
         ]
         y = 60
         for line in lines:
