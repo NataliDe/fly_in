@@ -7,7 +7,7 @@ from .models import MapData
 from .simulator import Simulator
 
 SCREEN_W = 1800
-SCREEN_H = 1100
+SCREEN_H = 900
 BG_COLOR = (20, 23, 31)
 GRID_COLOR = (38, 42, 52)
 TEXT_COLOR = (235, 235, 240)
@@ -22,6 +22,7 @@ TOP_UI_HEIGHT = 210
 MAP_MARGIN_X = 120
 MAP_MARGIN_Y = 80
 Y_SPACING_FACTOR = 3.0
+X_SPACING_FACTOR = 1.4
 
 
 def color_from_name(name: str, kind: str, zone: str) -> Tuple[int, int, int]:
@@ -110,7 +111,7 @@ class Renderer:
 
     def world_to_screen(self, x: float, y: float) -> Tuple[int, int]:
         return (
-            int(self.offset_x + x * self.scale),
+            int(self.offset_x + x * self.scale * X_SPACING_FACTOR),
             int(self.offset_y - y * self.scale * Y_SPACING_FACTOR),
         )
 
@@ -160,7 +161,7 @@ class Renderer:
             pygame.draw.circle(self.screen, color, pos, radius)
             pygame.draw.circle(self.screen, (12, 12, 15), pos, radius, 4)
 
-            cap_display = "∞" if hub.kind in {
+            cap_display = "♥" if hub.kind in {
                 "start", "end"} else str(hub.max_drones)
             cap_surf = self.font.render(cap_display, True, (10, 10, 14))
             self.screen.blit(
