@@ -54,42 +54,59 @@ class Simulator:
                 load[key] += 1
         return load
 
+    def capacity_snapshot(self) -> tuple[Dict[str, int], Dict[Tuple[str, str], int]]:
+        """Public snapshot for capacity/debug output."""
+        return self._hub_occupancy(), self._active_link_load()
+
+    def _connection_log_text(self, from_hub: str, to_hub: str) -> str:
+        return f"{from_hub}-{to_hub}"
+
     def _start_move(self, drone: Drone, next_hub_name: str) -> str:
+        """
+        Start a move and return the output token for the current turn.
+
+        normal/priority:
+            immediate arrival this turn -> D<ID>-<hub>
+
+        restricted:
+            first turn is spent on the connection -> D<ID>-<from>-<to>
+            arrival will be logged on a later turn
+        """
         current = drone.current_hub
         target = self.map_data.hubs[next_hub_name]
+        travel_cost = target.travel_cost()
+
         drone.from_hub = current
         drone.to_hub = next_hub_name
-        drone.remaining_turns = target.travel_cost()
-        drone.total_move_turns = drone.remaining_turns
+        drone.remaining_turns = travel_cost
+        drone.total_move_turns = travel_cost
         drone.progress = 0.0
         drone.move_duration = MOVE_TIME_PER_TURN * drone.total_move_turns
 
-        '''
-        if drone.remaining_turns == 1:
+        if travel_cost == 1:
             drone.last_hub = current
             drone.current_hub = next_hub_name
             drone.from_hub = None
             drone.to_hub = None
             drone.remaining_turns = 0
             drone.total_move_turns = 0
-            if drone.current_hub == self.map_data.end_name:
+            drone.progress = 0.0
+
+            if drone.current_hub == self.map_data.end_name and not drone.finished:
                 drone.finished = True
                 self.finished_count += 1
+
             return f"{drone.name()}-{next_hub_name}"
-            '''
 
-        return ""
+        return f"{drone.name()}-{self._connection_log_text(current, next_hub_name)}"
 
-    def _preferred_neighbors(self, current: str,
-                             candidates: List[str]) -> List[str]:
+    def _preferred_neighbors(self, current: str, candidates: List[str]) -> List[str]:
         if len(candidates) <= 1:
             return candidates
         cursor = self.dispatch_memory.get(current, 0)
-        ordered = candidates[cursor:] + candidates[:cursor]
-        return ordered
+        return candidates[cursor:] + candidates[:cursor]
 
-    def _remember_dispatch(self, current: str, chosen: str,
-                           candidates: List[str]) -> None:
+    def _remember_dispatch(self, current: str, chosen: str, candidates: List[str]) -> None:
         if len(candidates) <= 1:
             return
         if chosen not in candidates:
@@ -97,50 +114,61 @@ class Simulator:
         index = candidates.index(chosen)
         self.dispatch_memory[current] = (index + 1) % len(candidates)
 
-    def step(self) -> None:
-        if self.is_finished():
-            return
-
-        turn_moves: List[str] = []
-
-        # Спочатку дозавершуємо рухи з попереднього ходу
+    def _finish_in_progress_moves(self, turn_moves: List[str]) -> None:
+        """Advance already moving drones by one turn and log arrivals."""
         for drone in self.drones:
             if not drone.is_moving:
                 continue
+
             drone.remaining_turns -= 1
+
             if (
                 drone.remaining_turns <= 0
                 and drone.to_hub is not None
                 and drone.from_hub is not None
             ):
                 origin = drone.from_hub
-                drone.current_hub = drone.to_hub
+                destination = drone.to_hub
+
+                drone.current_hub = destination
                 drone.last_hub = origin
                 drone.from_hub = None
                 drone.to_hub = None
                 drone.total_move_turns = 0
                 drone.remaining_turns = 0
-                if (drone.current_hub == self.map_data.end_name
-                        and not drone.finished):
+                drone.progress = 1.0
+
+                if drone.current_hub == self.map_data.end_name and not drone.finished:
                     drone.finished = True
                     self.finished_count += 1
+
                 turn_moves.append(f"{drone.name()}-{drone.current_hub}")
 
-        # Якщо всі вже прибули, не відкриваємо ще один новий хід
+    def step(self) -> None:
+        if self.is_finished():
+            self.move_logs = []
+            return
+
+        self.turn += 1
+        turn_moves: List[str] = []
+
+        self._finish_in_progress_moves(turn_moves)
+
         if self.is_finished():
             self.move_logs = turn_moves
             return
 
-        self.turn += 1
-
         occupancy = self._hub_occupancy()
         incoming = self._incoming_counts()
         link_load = self._active_link_load()
+
         reserved_targets = {name: 0 for name in self.map_data.hubs}
         reserved_links = {key: 0 for key in self.map_data.connections}
 
-        idle_drones = [d for d in self.drones if
-                       not d.finished and not d.is_moving]
+        idle_drones = [
+            drone for drone in self.drones
+            if not drone.finished and not drone.is_moving
+        ]
         idle_drones.sort(
             key=lambda drone: (
                 self.planner.base_distance.get(drone.current_hub, 10**9),
@@ -159,16 +187,19 @@ class Simulator:
             for hub_name, hub in self.map_data.hubs.items():
                 if hub.kind == "end":
                     continue
-                if (
-                    occupancy[hub_name] + incoming[hub_name] +
-                        reserved_targets[hub_name] >= hub.effective_capacity()
-                ):
+
+                used = (
+                    occupancy[hub_name]
+                    + incoming[hub_name]
+                    + reserved_targets[hub_name]
+                )
+                if used >= hub.effective_capacity():
                     blocked_hubs.add(hub_name)
 
             blocked_links = set()
             for key, conn in self.map_data.connections.items():
-                if (link_load[key] +
-                        reserved_links[key] >= conn.max_link_capacity):
+                used = link_load[key] + reserved_links[key]
+                if used >= conn.max_link_capacity:
                     blocked_links.add(key)
 
             ranked = self.planner.ranked_candidates(
@@ -185,10 +216,16 @@ class Simulator:
             if not ranked:
                 continue
 
-            candidate_names = [item.next_hub for item in ranked
-                               if item.score <= ranked[0].score + 0.20]
+            candidate_names = [
+                item.next_hub
+                for item in ranked
+                if item.score <= ranked[0].score + 0.20
+            ]
+
             preferred_neighbors = self._preferred_neighbors(
-                drone.current_hub, candidate_names)
+                drone.current_hub,
+                candidate_names,
+            )
 
             next_hop = self.planner.choose_next_hop(
                 current=drone.current_hub,
@@ -207,24 +244,33 @@ class Simulator:
 
             target_hub = self.map_data.hubs[next_hop]
             conn = self.map_data.get_connection(drone.current_hub, next_hop)
-            future_occ = (occupancy[next_hop] +
-                          incoming[next_hop] + reserved_targets[next_hop])
-            if (target_hub.kind != "end"
-                    and future_occ >= target_hub.effective_capacity()):
+
+            future_occ = (
+                occupancy[next_hop]
+                + incoming[next_hop]
+                + reserved_targets[next_hop]
+            )
+            if target_hub.kind != "end" and future_occ >= target_hub.effective_capacity():
                 continue
-            if (link_load[conn.key] +
-                    reserved_links[conn.key] >= conn.max_link_capacity):
+
+            future_link = link_load[conn.key] + reserved_links[conn.key]
+            if future_link >= conn.max_link_capacity:
                 continue
 
             occupancy[drone.current_hub] -= 1
             reserved_links[conn.key] += 1
+
             if target_hub.travel_cost() == 1:
                 occupancy[next_hop] += 1
             else:
                 reserved_targets[next_hop] += 1
 
-            self._remember_dispatch(drone.current_hub, next_hop,
-                                    candidate_names)
+            self._remember_dispatch(
+                drone.current_hub,
+                next_hop,
+                candidate_names,
+            )
+
             move_text = self._start_move(drone, next_hop)
             if move_text:
                 turn_moves.append(move_text)

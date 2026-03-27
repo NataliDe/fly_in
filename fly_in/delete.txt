@@ -1,0 +1,199 @@
+. У main() додай новий прапорець
+
+Було:
+
+text_mode = "--text" in flags
+auto = "--auto" in flags
+show_log = "--log" in flags or text_mode
+
+Стане:
+
+text_mode = "--text" in flags
+auto = "--auto" in flags
+show_log = "--log" in flags or text_mode
+show_capacity_info = "--capacity-info" in flags
+2. Онови usage message
+
+Було:
+
+print(
+    "Usage: python3 -m fly_in.main path/to/map.txt "
+    "[--text] [--auto] [--log]"
+)
+
+Стане:
+
+print(
+    "Usage: python3 -m fly_in.main path/to/map.txt "
+    "[--text] [--auto] [--log] [--capacity-info]"
+)
+3. Додай функцію для формування capacity info
+
+Встав над run_text_mode():
+
+def format_capacity_info(simulator: Simulator) -> list[str]:
+    hub_occupancy = simulator._hub_occupancy()
+    link_load = simulator._active_link_load()
+
+    lines: list[str] = []
+
+    for hub_name in sorted(simulator.map_data.hubs):
+        hub = simulator.map_data.hubs[hub_name]
+        used = hub_occupancy[hub_name]
+
+        if hub.kind in {"start", "end"}:
+            capacity = "∞"
+        else:
+            capacity = str(hub.max_drones)
+
+        lines.append(f"Zone {hub_name}: {used}/{capacity} drones")
+
+    for key in sorted(simulator.map_data.connections):
+        connection = simulator.map_data.connections[key]
+        used = link_load[key]
+        capacity = connection.max_link_capacity
+        lines.append(
+            f"Connection {connection.display_name()}: {used}/{capacity} capacity used"
+        )
+
+    return lines
+4. Розшир print_turn_output()
+
+Було:
+
+def print_turn_output(simulator: Simulator, show_log: bool) -> None:
+    if show_log and simulator.move_logs:
+        print(" ".join(simulator.move_logs))
+
+Стане:
+
+def print_turn_output(
+    simulator: Simulator,
+    show_log: bool,
+    show_capacity_info: bool,
+) -> None:
+    if show_log and simulator.move_logs:
+        print(" ".join(simulator.move_logs))
+
+    if show_capacity_info:
+        for line in format_capacity_info(simulator):
+            print(line)
+5. Онови run_text_mode()
+
+Було:
+
+def run_text_mode(simulator: Simulator) -> None:
+    while not simulator.is_finished():
+        simulator.step()
+        print_turn_output(simulator, show_log=True)
+
+Стане:
+
+def run_text_mode(
+    simulator: Simulator,
+    show_capacity_info: bool,
+) -> None:
+    while not simulator.is_finished():
+        simulator.step()
+        print_turn_output(
+            simulator,
+            show_log=True,
+            show_capacity_info=show_capacity_info,
+        )
+6. Онови run_gui_mode()
+
+Сигнатура була:
+
+def run_gui_mode(
+    simulator: Simulator,
+    auto: bool,
+    show_log: bool,
+) -> None:
+
+Стане:
+
+def run_gui_mode(
+    simulator: Simulator,
+    auto: bool,
+    show_log: bool,
+    show_capacity_info: bool,
+) -> None:
+
+І в обох місцях після simulator.step() заміни:
+
+print_turn_output(simulator, show_log=show_log)
+
+на:
+
+print_turn_output(
+    simulator,
+    show_log=show_log,
+    show_capacity_info=show_capacity_info,
+)
+7. Передай прапорець із main()
+
+Було:
+
+if text_mode:
+    run_text_mode(simulator)
+    return
+
+Стане:
+
+if text_mode:
+    run_text_mode(
+        simulator,
+        show_capacity_info=show_capacity_info,
+    )
+    return
+
+І було:
+
+run_gui_mode(
+    simulator=simulator,
+    auto=auto,
+    show_log=show_log,
+)
+
+Стане:
+
+run_gui_mode(
+    simulator=simulator,
+    auto=auto,
+    show_log=show_log,
+    show_capacity_info=show_capacity_info,
+)
+Як пояснити evaluator, що ти робиш
+
+Можеш сказати так:
+
+I add a new CLI flag --capacity-info, then I extend the output function so after each simulation step it also prints hub occupancy and connection usage. I reuse the simulator state, so I do not change the pathfinding logic, only the output layer.
+
+Як продемонструвати
+
+Запуск:
+
+python3 -m fly_in.main maps/challenger/01_the_impossible_dream.txt --text --capacity-info
+
+І сказати:
+
+normal simulation lines still appear
+after each turn I also print zone usage
+and connection usage
+no change to core algorithm, only additional debug/output info
+Якщо хочеш зовсім коротко, що міняти
+
+Три речі:
+
+новий flag у main
+format_capacity_info()
+додатковий друк у print_turn_output()
+
+Ось найкоротший шаблон відповіді на live coding:
+
+show_capacity_info = "--capacity-info" in flags
+def format_capacity_info(simulator: Simulator) -> list[str]:
+    ...
+if show_capacity_info:
+    for line in format_capacity_info(simulator):
+        print(line)
