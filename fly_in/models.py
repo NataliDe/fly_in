@@ -6,7 +6,7 @@ ZONE_TYPES = {"normal", "restricted", "priority", "blocked"}
 
 @dataclass
 class Hub:
-    """A node in the drone network."""
+    """Represent a map hub with position, type, capacity, and neighbors."""
 
     name: str
     x: int
@@ -18,7 +18,7 @@ class Hub:
     neighbors: List[str] = field(default_factory=list)
 
     def travel_cost(self) -> int:
-        """Return movement cost when entering this hub."""
+        """Return the number of turns required to enter this hub."""
         if self.zone_type == "blocked":
             return 10**9
         if self.zone_type == "restricted":
@@ -26,7 +26,7 @@ class Hub:
         return 1
 
     def effective_capacity(self) -> int:
-        """Return runtime capacity with start/end exceptions."""
+        """Return the active capacity used during the simulation."""
         if self.kind in {"start", "end"}:
             return 10**9
         return self.max_drones
@@ -34,7 +34,7 @@ class Hub:
 
 @dataclass(frozen=True)
 class Connection:
-    """Bidirectional edge between hubs."""
+    """Represent a bidirectional link between two hubs."""
 
     a: str
     b: str
@@ -42,16 +42,18 @@ class Connection:
 
     @property
     def key(self) -> Tuple[str, str]:
+        """Return a normalized tuple key for this connection."""
         return tuple(sorted((self.a, self.b)))
 
     def display_name(self) -> str:
+        """Return a stable text label for this connection."""
         left, right = self.key
         return f"{left}-{right}"
 
 
 @dataclass
 class MapData:
-    """Parsed map definition."""
+    """Store the full parsed map and its global metadata."""
 
     nb_drones: int
     hubs: Dict[str, Hub]
@@ -61,12 +63,13 @@ class MapData:
     title: str = "Unnamed map"
 
     def get_connection(self, a: str, b: str) -> Connection:
+        """Return the connection object between two hubs."""
         return self.connections[tuple(sorted((a, b)))]
 
 
 @dataclass
 class Drone:
-    """Runtime state of a drone."""
+    """Store the runtime state of one drone during the simulation."""
 
     drone_id: int
     current_hub: str
@@ -80,13 +83,16 @@ class Drone:
     last_hub: Optional[str] = None
 
     def name(self) -> str:
+        """Return the printable drone label used in logs and UI."""
         return f"D{self.drone_id}"
 
     @property
     def is_moving(self) -> bool:
+        """Return True if the drone is currently traveling between hubs."""
         return self.from_hub is not None and self.to_hub is not None
 
     def active_connection_key(self) -> Optional[Tuple[str, str]]:
+        """Return the normalized key of the connection currently in use."""
         if self.from_hub is None or self.to_hub is None:
             return None
         return tuple(sorted((self.from_hub, self.to_hub)))

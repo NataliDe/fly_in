@@ -5,23 +5,26 @@ from .models import Connection, Hub, MapData, ZONE_TYPES
 
 
 class ParseError(ValueError):
-    """Raised when the input map is invalid."""
+    """Raised when a map file contains invalid syntax or data."""
 
 
 def _remove_comment(line: str) -> str:
+    """Remove the comment part of a line and keep trailing content clean."""
     if "#" in line:
         return line.split("#", 1)[0].rstrip()
     return line.rstrip()
 
 
 def _split_main_and_meta(line: str) -> tuple[str, str]:
-    if "[" in line:  # Розділення основної частини і метаданих
+    """Split a line into its main part and optional metadata block."""
+    if "[" in line:
         left, right = line.split("[", 1)
         return left.strip(), right.strip()
     return line.strip(), ""
 
 
 def _parse_metadata(meta_text: str, line_number: int) -> Dict[str, str]:
+    """Parse a metadata block into a key-value dictionary."""
     result: Dict[str, str] = {}
     if not meta_text:
         return result
@@ -46,8 +49,10 @@ def _parse_metadata(meta_text: str, line_number: int) -> Dict[str, str]:
     return result
 
 
-def _parse_hub_line(line: str, line_number: int) -> tuple[str, str, str, str,
-                                                          Dict[str, str]]:
+def _parse_hub_line(
+    line: str, line_number: int
+) -> tuple[str, str, str, str, Dict[str, str]]:
+    """Parse a hub definition line and return its raw components."""
     main_part, meta_text = _split_main_and_meta(line)
     prefix, sep, rest = main_part.partition(":")
     if sep == "":
@@ -66,13 +71,13 @@ def _parse_hub_line(line: str, line_number: int) -> tuple[str, str, str, str,
     if "-" in name or " " in name:
         raise ParseError(f"line {line_number}: invalid hub name '{name}'")
 
-    return prefix, name, x_text, y_text, _parse_metadata(meta_text,
-                                                         line_number)
+    return prefix, name, x_text, y_text, _parse_metadata(meta_text, line_number)
 
 
-def _parse_connection_line(line: str,
-                           line_number: int) -> tuple[str, str,
-                                                      Dict[str, str]]:
+def _parse_connection_line(
+    line: str, line_number: int
+) -> tuple[str, str, Dict[str, str]]:
+    """Parse a connection definition line and return its endpoints and metadata."""
     main_part, meta_text = _split_main_and_meta(line)
     prefix, sep, rest = main_part.partition(":")
     if sep == "" or prefix.strip() != "connection":
@@ -92,7 +97,7 @@ def _parse_connection_line(line: str,
 
 
 def parse_map(path: str | Path) -> MapData:
-    """Parse a map file into strongly typed project models."""
+    """Read a map file and convert it into validated project models."""
     file_path = Path(path)
     raw_lines = file_path.read_text(encoding="utf-8").splitlines()
     if not raw_lines:
@@ -193,8 +198,11 @@ def parse_map(path: str | Path) -> MapData:
                     f" must be a positive integer"
                 )
 
-            connection = Connection(a=a, b=b,
-                                    max_link_capacity=int(max_link_text))
+            connection = Connection(
+                a=a,
+                b=b,
+                max_link_capacity=int(max_link_text),
+            )
             connections[key] = connection
             hubs[a].neighbors.append(b)
             hubs[b].neighbors.append(a)

@@ -8,14 +8,9 @@ from .simulator import Simulator
 
 
 def print_turn_output(simulator: Simulator, show_log: bool) -> None:
+    """Print moves from the current turn when log output is enabled."""
     if show_log and simulator.move_logs:
         print(" ".join(simulator.move_logs))
-
-
-def run_text_mode(simulator: Simulator) -> None:
-    while not simulator.is_finished():
-        simulator.step()
-        print_turn_output(simulator, show_log=True)
 
 
 def run_gui_mode(
@@ -23,6 +18,7 @@ def run_gui_mode(
     auto: bool,
     show_log: bool,
 ) -> None:
+    """Run the pygame loop and update the simulation frame by frame."""
     renderer = Renderer(simulator.map_data)
     running = auto
     step_cooldown = 0.0
@@ -70,19 +66,19 @@ def run_gui_mode(
 
 
 def main() -> None:
+    """Parse command-line arguments, load the map, and start the GUI."""
     if len(sys.argv) < 2:
         print(
             "Usage: python3 -m fly_in.main path/to/map.txt "
-            "[--text] [--auto] [--log]"
+            "[--auto] [--log]"
         )
         return
 
     map_path = sys.argv[1]
     flags = sys.argv[2:]
 
-    text_mode = "--text" in flags
     auto = "--auto" in flags
-    show_log = "--log" in flags or text_mode
+    show_log = "--log" in flags
 
     try:
         map_data = parse_map(map_path)
@@ -91,10 +87,6 @@ def main() -> None:
         return
 
     simulator = Simulator(map_data)
-
-    if text_mode:
-        run_text_mode(simulator)
-        return
 
     run_gui_mode(
         simulator=simulator,

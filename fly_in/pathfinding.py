@@ -8,6 +8,15 @@ from .models import MapData
 
 @dataclass(frozen=True)
 class MoveCandidate:
+    """Store one possible next hop together with its evaluation metrics.
+
+    Attributes:
+        next_hub: Name of the neighboring hub that can be chosen next.
+        score: Final weighted score for this move. Lower is better.
+        progress_gain: Estimated improvement in distance to the goal.
+        flexibility: Number of valid forward continuations after this move.
+    """
+
     next_hub: str
     score: float
     progress_gain: float
@@ -15,13 +24,29 @@ class MoveCandidate:
 
 
 class Planner:
-    """Reusable weighted path helper for the simulator."""
+    """Evaluate and rank possible next moves for drones.
+
+    The planner precomputes reverse distances from every hub to the goal and
+    uses them together with congestion, link usage, backward penalties, and
+    flexibility heuristics to score candidate moves.
+    """
 
     def __init__(self, map_data: MapData) -> None:
+        """Initialize the planner and precompute base distances to the goal."""
         self.map_data = map_data
         self.base_distance = self._build_reverse_distances()
 
     def _build_reverse_distances(self) -> Dict[str, float]:
+        """Compute weighted distances from every hub to the goal.
+
+        This method runs a reverse Dijkstra-style search starting from the end
+        hub. The result is a distance map used later to estimate whether a move
+        makes progress toward the goal and whether a hub is reachable at all.
+
+        Returns:
+            A dictionary mapping each hub name to its weighted distance from the
+            goal. Unreachable hubs keep ``math.inf``.
+        """
         dist: Dict[str, float] = {
             name: math.inf for name in self.map_data.hubs}
         goal = self.map_data.end_name
@@ -48,6 +73,19 @@ class Planner:
         return dist
 
     def _forward_flexibility(self, current: str, neighbor_name: str) -> int:
+        """Count valid forward options after moving into a candidate hub.
+
+        The method looks one step ahead from ``neighbor_name`` and counts how
+        many continuations remain useful. It excludes the hub we came from,
+        blocked hubs, and hubs that cannot reach the goal.
+
+        Args:
+            current: The drone's current hub.
+            neighbor_name: The candidate next hub being evaluated.
+
+        Returns:
+            The number of valid forward continuations after this move.
+        """
         flex = 0
         for next_name in self.map_data.hubs[neighbor_name].neighbors:
             if next_name == current:
@@ -72,6 +110,31 @@ class Planner:
         reserved_targets: Optional[Dict[str, int]] = None,
         reserved_links: Optional[Dict[Tuple[str, str], int]] = None,
     ) -> List[MoveCandidate]:
+        """Rank all valid neighboring hubs from best to worst.
+
+        Each neighboring hub is filtered through hard constraints first
+        (blocked zone, blocked link, unreachable goal). Remaining candidates
+        receive a weighted score based on path cost, distance to the goal,
+        future hub congestion, future link congestion, backward movement,
+        forward flexibility, and actual progress toward the destination.
+
+        Args:
+            current: The drone's current hub.
+            blocked_hubs: Hubs that cannot currently accept more drones.
+            blocked_links: Connections that cannot currently accept more drones.
+            incoming: Number of drones already moving toward each hub.
+            occupancy: Number of drones currently standing in each hub.
+            link_load: Number of drones currently occupying each connection.
+            last_hub: Previous hub visited by the drone, used to penalize
+                immediate backtracking.
+            reserved_targets: Hubs already reserved by other drones in the same
+                simulation turn.
+            reserved_links: Links already reserved by other drones in the same
+                simulation turn.
+
+        Returns:
+            A list of ``MoveCandidate`` objects sorted from best to worst.
+        """
         candidates: List[MoveCandidate] = []
         current_dist = self.base_distance.get(current, math.inf)
         reserved_targets = reserved_targets or {}
@@ -151,6 +214,29 @@ class Planner:
         reserved_links: Optional[Dict[Tuple[str, str], int]] = None,
         preferred_neighbors: Optional[List[str]] = None,
     ) -> Optional[str]:
+        """Choose the next hub for a drone from the ranked candidate list.
+
+        The method first computes ranked candidates. If a preferred ordering is
+        provided, it tries to select a preferred neighbor that is still close
+        enough to the best score. Otherwise, it returns the top-ranked
+        candidate.
+
+        Args:
+            current: The drone's current hub.
+            blocked_hubs: Hubs that cannot currently accept more drones.
+            blocked_links: Connections that cannot currently accept more drones.
+            incoming: Number of drones already moving toward each hub.
+            occupancy: Number of drones currently standing in each hub.
+            link_load: Number of drones currently occupying each connection.
+            last_hub: Previous hub visited by the drone.
+            reserved_targets: Hubs already reserved in the current turn.
+            reserved_links: Links already reserved in the current turn.
+            preferred_neighbors: Optional ordered list of nearly equivalent
+                neighbors used to improve load balancing.
+
+        Returns:
+            The chosen next hub name, or ``None`` if no valid move exists.
+        """
         candidates = self.ranked_candidates(
             current=current,
             blocked_hubs=blocked_hubs,
@@ -176,3 +262,4 @@ class Planner:
                     return name
 
         return candidates[0].next_hub
+    

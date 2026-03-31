@@ -10,6 +10,7 @@ class Simulator:
     """Discrete turn simulator with capacity-aware scheduling."""
 
     def __init__(self, map_data: MapData) -> None:
+        """Initialize the simulator state and create the path planner."""
         self.map_data = map_data
         self.planner = Planner(map_data)
         self.turn = 0
@@ -20,6 +21,7 @@ class Simulator:
         self.reset()
 
     def reset(self) -> None:
+        """Reset the simulation to its initial state and recreate all drones."""
         self.turn = 0
         self.finished_count = 0
         self.move_logs = []
@@ -30,9 +32,11 @@ class Simulator:
         ]
 
     def is_finished(self) -> bool:
+        """Return True when all drones have reached the end hub."""
         return self.finished_count == len(self.drones)
 
     def _hub_occupancy(self) -> Dict[str, int]:
+        """Count how many drones are currently standing in each hub."""
         occupancy = {name: 0 for name in self.map_data.hubs}
         for drone in self.drones:
             if drone.finished or not drone.is_moving:
@@ -40,6 +44,7 @@ class Simulator:
         return occupancy
 
     def _incoming_counts(self) -> Dict[str, int]:
+        """Count how many drones are currently moving toward each hub."""
         counts = {name: 0 for name in self.map_data.hubs}
         for drone in self.drones:
             if drone.is_moving and drone.to_hub is not None:
@@ -47,6 +52,7 @@ class Simulator:
         return counts
 
     def _active_link_load(self) -> Dict[Tuple[str, str], int]:
+        """Count how many drones are currently occupying each connection."""
         load = {key: 0 for key in self.map_data.connections}
         for drone in self.drones:
             key = drone.active_connection_key()
@@ -55,22 +61,22 @@ class Simulator:
         return load
 
     def capacity_snapshot(self) -> tuple[Dict[str, int], Dict[Tuple[str, str], int]]:
-        """Public snapshot for capacity/debug output."""
+        """Return current hub occupancy and active link usage for debugging or display."""
         return self._hub_occupancy(), self._active_link_load()
 
     def _connection_log_text(self, from_hub: str, to_hub: str) -> str:
+        """Build the text label used when logging movement on a connection."""
         return f"{from_hub}-{to_hub}"
 
     def _start_move(self, drone: Drone, next_hub_name: str) -> str:
         """
-        Start a move and return the output token for the current turn.
+        Start a move for one drone and return the output token for this turn.
 
-        normal/priority:
-            immediate arrival this turn -> D<ID>-<hub>
+        For normal or priority hubs, the drone arrives immediately and the
+        output is D<ID>-<hub>.
 
-        restricted:
-            first turn is spent on the connection -> D<ID>-<from>-<to>
-            arrival will be logged on a later turn
+        For restricted hubs, the drone spends the first turn on the connection
+        and the output is D<ID>-<from>-<to>. The arrival is logged later.
         """
         current = drone.current_hub
         target = self.map_data.hubs[next_hub_name]
@@ -101,12 +107,14 @@ class Simulator:
         return f"{drone.name()}-{self._connection_log_text(current, next_hub_name)}"
 
     def _preferred_neighbors(self, current: str, candidates: List[str]) -> List[str]:
+        """Rotate equally good candidates to spread traffic more fairly over time."""
         if len(candidates) <= 1:
             return candidates
         cursor = self.dispatch_memory.get(current, 0)
         return candidates[cursor:] + candidates[:cursor]
 
     def _remember_dispatch(self, current: str, chosen: str, candidates: List[str]) -> None:
+        """Remember the last chosen direction so future drones can be balanced better."""
         if len(candidates) <= 1:
             return
         if chosen not in candidates:
@@ -115,7 +123,7 @@ class Simulator:
         self.dispatch_memory[current] = (index + 1) % len(candidates)
 
     def _finish_in_progress_moves(self, turn_moves: List[str]) -> None:
-        """Advance already moving drones by one turn and log arrivals."""
+        """Advance all moving drones by one turn and log arrivals that finish now."""
         for drone in self.drones:
             if not drone.is_moving:
                 continue
@@ -145,6 +153,13 @@ class Simulator:
                 turn_moves.append(f"{drone.name()}-{drone.current_hub}")
 
     def step(self) -> None:
+        """
+        Execute one simulation turn.
+
+        This method first completes drones already in transit, then checks all
+        idle drones, chooses valid next moves for them, enforces hub and link
+        capacities, and stores the output tokens for the current turn.
+        """
         if self.is_finished():
             self.move_logs = []
             return
@@ -153,6 +168,7 @@ class Simulator:
         turn_moves: List[str] = []
 
         self._finish_in_progress_moves(turn_moves)
+        # ті, хто не долетів спочатку прибувають
 
         if self.is_finished():
             self.move_logs = turn_moves
@@ -278,6 +294,7 @@ class Simulator:
         self.move_logs = turn_moves
 
     def update_animation(self, dt: float) -> None:
+        """Update smooth movement progress for all drones based on frame time."""
         for drone in self.drones:
             if drone.is_moving:
                 drone.progress += dt / drone.move_duration

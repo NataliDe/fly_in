@@ -26,6 +26,7 @@ X_SPACING_FACTOR = 1.4
 
 
 def color_from_name(name: str, kind: str, zone: str) -> Tuple[int, int, int]:
+    """Return the RGB color for a hub based on metadata or fallback rules."""
     palette = {
         "green": (60, 210, 90),
         "red": (220, 60, 60),
@@ -62,9 +63,10 @@ def color_from_name(name: str, kind: str, zone: str) -> Tuple[int, int, int]:
 
 
 class Renderer:
-    """Pygame renderer for the simulation."""
+    """Draw the map, drones, and status information with pygame."""
 
     def __init__(self, map_data: MapData) -> None:
+        """Initialize pygame, window state, fonts, and map view settings."""
         pygame.init()
         pygame.display.set_caption("Fly-in Drone Simulation")
         self.screen = pygame.display.set_mode((SCREEN_W, SCREEN_H))
@@ -80,6 +82,7 @@ class Renderer:
         self._recalculate_view()
 
     def _recalculate_view(self) -> None:
+        """Compute scale and offsets so the full map fits nicely on screen."""
         xs = [hub.x for hub in self.map_data.hubs.values()]
         ys = [hub.y for hub in self.map_data.hubs.values()]
         if not xs or not ys:
@@ -110,12 +113,14 @@ class Renderer:
         )
 
     def world_to_screen(self, x: float, y: float) -> Tuple[int, int]:
+        """Convert map coordinates into screen coordinates."""
         return (
             int(self.offset_x + x * self.scale * X_SPACING_FACTOR),
             int(self.offset_y - y * self.scale * Y_SPACING_FACTOR),
         )
 
     def draw_grid(self) -> None:
+        """Draw the background grid behind the map."""
         for x in range(0, SCREEN_W, 50):
             pygame.draw.line(self.screen, GRID_COLOR, (
                 x, TOP_UI_HEIGHT), (x, SCREEN_H), 1)
@@ -123,6 +128,7 @@ class Renderer:
             pygame.draw.line(self.screen, GRID_COLOR, (0, y), (SCREEN_W, y), 1)
 
     def draw_links(self, sim: Simulator) -> None:
+        """Draw all connections and highlight those currently in use."""
         busy_keys = set()
         for drone in sim.drones:
             key = drone.active_connection_key()
@@ -149,6 +155,7 @@ class Renderer:
                 my - cap_text.get_height() // 2))
 
     def draw_hubs(self, sim: Simulator) -> None:
+        """Draw all hubs with their colors and capacity labels."""
         occupancy = {name: 0 for name in self.map_data.hubs}
         for drone in sim.drones:
             if not drone.is_moving:
@@ -161,7 +168,7 @@ class Renderer:
             pygame.draw.circle(self.screen, color, pos, radius)
             pygame.draw.circle(self.screen, (12, 12, 15), pos, radius, 4)
 
-            cap_display = "♥" if hub.kind in {
+            cap_display = "∞" if hub.kind in {
                 "start", "end"} else str(hub.max_drones)
             cap_surf = self.font.render(cap_display, True, (10, 10, 14))
             self.screen.blit(
@@ -183,6 +190,7 @@ class Renderer:
             '''
 
     def draw_drones(self, sim: Simulator) -> None:
+        """Draw drones either in motion on links or parked around hubs."""
         parked_count: Dict[str, int] = {name: 0 for name in self.map_data.hubs}
         for drone in sim.drones:
             if drone.is_moving and drone.from_hub and drone.to_hub:
@@ -210,6 +218,7 @@ class Renderer:
                                     int(y) - text.get_height() // 2))
 
     def draw_ui(self, sim: Simulator, running: bool) -> None:
+        """Draw the title, controls, and current simulation status."""
         title = self.font_big.render(self.map_data.title, True, TEXT_COLOR)
         self.screen.blit(title, (24, 18))
         lines = [
@@ -217,7 +226,7 @@ class Renderer:
             f"Delivered: {sim.finished_count}/{len(sim.drones)}",
             f"State: {'RUNNING' if running else 'PAUSED'}",
             "Keys: SPACE play/pause | N next turn | R restart | ESC exit",
-            "On hubs: big number = capacity,"
+            "On hubs: big number = capacity, on links = link capacity"
             #  "small bottom number = drones inside, on links = link capacity",
         ]
         y = 60
@@ -230,6 +239,7 @@ class Renderer:
                          (SCREEN_W, TOP_UI_HEIGHT - 6), 2)
 
     def draw(self, sim: Simulator, running: bool) -> None:
+        """Render a full frame of the current simulation state."""
         self.screen.fill(BG_COLOR)
         self.draw_grid()
         self.draw_links(sim)
