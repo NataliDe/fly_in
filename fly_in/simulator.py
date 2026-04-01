@@ -88,22 +88,7 @@ class Simulator:
         drone.total_move_turns = travel_cost
         drone.progress = 0.0
         drone.move_duration = MOVE_TIME_PER_TURN * drone.total_move_turns
-
-        if travel_cost == 1:
-            drone.last_hub = current
-            drone.current_hub = next_hub_name
-            drone.from_hub = None
-            drone.to_hub = None
-            drone.remaining_turns = 0
-            drone.total_move_turns = 0
-            drone.progress = 0.0
-
-            if drone.current_hub == self.map_data.end_name and not drone.finished:
-                drone.finished = True
-                self.finished_count += 1
-
-            return f"{drone.name()}-{next_hub_name}"
-
+       
         return f"{drone.name()}-{self._connection_log_text(current, next_hub_name)}"
 
     def _preferred_neighbors(self, current: str, candidates: List[str]) -> List[str]:
