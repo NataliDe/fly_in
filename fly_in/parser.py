@@ -40,17 +40,20 @@ def _parse_metadata(meta_text: str, line_number: int) -> Dict[str, str]:
     for item in inner.split():
         if "=" not in item:
             raise ParseError(
-                f"line {line_number}: invalid metadata entry '{item}'")
+                f"line {line_number}: invalid metadata entry '{item}'"
+            )
         key, value = item.split("=", 1)
         if not key or not value:
             raise ParseError(
-                f"line {line_number}: invalid metadata entry '{item}'")
+                f"line {line_number}: invalid metadata entry '{item}'"
+            )
         result[key.strip()] = value.strip()
     return result
 
 
 def _parse_hub_line(
-    line: str, line_number: int
+    line: str,
+    line_number: int,
 ) -> tuple[str, str, str, str, Dict[str, str]]:
     """Parse a hub definition line and return its raw components."""
     main_part, meta_text = _split_main_and_meta(line)
@@ -71,13 +74,16 @@ def _parse_hub_line(
     if "-" in name or " " in name:
         raise ParseError(f"line {line_number}: invalid hub name '{name}'")
 
-    return prefix, name, x_text, y_text, _parse_metadata(meta_text, line_number)
+    return (prefix,
+            name, x_text, y_text, _parse_metadata(meta_text, line_number))
 
 
 def _parse_connection_line(
-    line: str, line_number: int
+    line: str,
+    line_number: int,
 ) -> tuple[str, str, Dict[str, str]]:
-    """Parse a connection definition line and return its endpoints and metadata."""
+    """Parse a connection definition
+        line and return its endpoints and metadata."""
     main_part, meta_text = _split_main_and_meta(line)
     prefix, sep, rest = main_part.partition(":")
     if sep == "" or prefix.strip() != "connection":
@@ -94,6 +100,134 @@ def _parse_connection_line(
         raise ParseError(f"line {line_number}: invalid connection definition")
 
     return a, b, _parse_metadata(meta_text, line_number)
+
+
+def _parse_nb_drones(
+    line: str,
+    line_number: int,
+    current_value: Optional[int],
+) -> int:
+    """Parse the drone count line and return the validated value."""
+    if current_value is not None:
+        raise ParseError(f"line {line_number}: "
+                         f"nb_drones declared more than once")
+
+    value = line.split(":", 1)[1].strip()
+    if not value.isdigit() or int(value) <= 0:
+        raise ParseError(f"line {line_number}: "
+                         f"nb_drones must be a positive integer")
+
+    return int(value)
+
+
+def _build_hub(
+    line: str,
+    line_number: int,
+    hubs: Dict[str, Hub],
+    start_name: Optional[str],
+    end_name: Optional[str],
+) -> tuple[Optional[str], Optional[str]]:
+    """Parse one hub line, validate it, and add the hub to the map state."""
+    prefix, name, x_text, y_text, meta = _parse_hub_line(line, line_number)
+
+    if name in hubs:
+        raise ParseError(f"line {line_number}: duplicate hub name '{name}'")
+
+    try:
+        x = int(x_text)
+        y = int(y_text)
+    except ValueError as exc:
+        raise ParseError(f"line {line_number}:"
+                         f" coordinates must be integers") from exc
+
+    zone_type = meta.get("zone", "normal")
+    if zone_type not in ZONE_TYPES:
+        raise ParseError(f"line {line_number}: "
+                         f"invalid zone type '{zone_type}'")
+
+    max_drones_text = meta.get("max_drones", "1")
+    if not max_drones_text.isdigit() or int(max_drones_text) <= 0:
+        raise ParseError(f"line {line_number}: "
+                         f"max_drones mustbe a positive integer")
+
+    kind = "hub"
+    if prefix == "start_hub":
+        kind = "start"
+    elif prefix == "end_hub":
+        kind = "end"
+
+    hubs[name] = Hub(
+        name=name,
+        x=x,
+        y=y,
+        kind=kind,
+        color=meta.get("color", "none"),
+        zone_type=zone_type,
+        max_drones=int(max_drones_text),
+    )
+
+    if kind == "start":
+        if start_name is not None:
+            raise ParseError(f"line {line_number}: "
+                             f"multiple start hubs declared")
+        start_name = name
+
+    if kind == "end":
+        if end_name is not None:
+            raise ParseError(f"line {line_number}: multiple end hubs declared")
+        end_name = name
+
+    return start_name, end_name
+
+
+def _build_connection(
+    line: str,
+    line_number: int,
+    hubs: Dict[str, Hub],
+    connections: Dict[Tuple[str, str], Connection],
+) -> None:
+    """Parse one connection line, validate it, and add it to the map state."""
+    a, b, meta = _parse_connection_line(line, line_number)
+
+    if a not in hubs or b not in hubs:
+        raise ParseError(f"line {line_number}: connection uses undefined hubs")
+
+    if a <= b:
+        key = (a, b)
+    else:
+        key = (b, a)
+    if key in connections:
+        raise ParseError(f"line {line_number}: duplicate connection '{a}-{b}'")
+
+    max_link_text = meta.get("max_link_capacity", "1")
+    if not max_link_text.isdigit() or int(max_link_text) <= 0:
+        raise ParseError(
+            f"line {line_number}: max_link_capacity must be a positive integer"
+        )
+
+    connection = Connection(
+        a=a,
+        b=b,
+        max_link_capacity=int(max_link_text),
+    )
+    connections[key] = connection
+    hubs[a].neighbors.append(b)
+    hubs[b].neighbors.append(a)
+
+
+def _validate_required_parts(
+    nb_drones: Optional[int],
+    start_name: Optional[str],
+    end_name: Optional[str],
+) -> tuple[int, str, str]:
+    """Validate required top-level map fields and return finalized values."""
+    if nb_drones is None:
+        raise ParseError("missing nb_drones declaration")
+    if start_name is None:
+        raise ParseError("missing start_hub declaration")
+    if end_name is None:
+        raise ParseError("missing end_hub declaration")
+    return nb_drones, start_name, end_name
 
 
 def parse_map(path: str | Path) -> MapData:
@@ -120,108 +254,41 @@ def parse_map(path: str | Path) -> MapData:
             continue
 
         if line.startswith("nb_drones:"):
-            if nb_drones is not None:
-                raise ParseError(
-                    f"line {index}: nb_drones declared more than once")
-            value = line.split(":", 1)[1].strip()
-            if not value.isdigit() or int(value) <= 0:
-                raise ParseError(
-                    f"line {index}: nb_drones must be a positive integer")
-            nb_drones = int(value)
+            nb_drones = _parse_nb_drones(line, index, nb_drones)
             continue
 
         if line.startswith(("start_hub:", "end_hub:", "hub:")):
-            prefix, name, x_text, y_text, meta = _parse_hub_line(line, index)
-            if name in hubs:
-                raise ParseError(f"line {index}: duplicate hub name '{name}'")
-
-            try:
-                x = int(x_text)
-                y = int(y_text)
-            except ValueError as exc:
-                raise ParseError(
-                    f"line {index}: coordinates must be integers") from exc
-
-            zone_type = meta.get("zone", "normal")
-            if zone_type not in ZONE_TYPES:
-                raise ParseError(
-                    f"line {index}: invalid zone type '{zone_type}'")
-
-            max_drones_text = meta.get("max_drones", "1")
-            if not max_drones_text.isdigit() or int(max_drones_text) <= 0:
-                raise ParseError(
-                    f"line {index}: max_drones must be a positive integer")
-
-            kind = "hub"
-            if prefix == "start_hub":
-                kind = "start"
-            elif prefix == "end_hub":
-                kind = "end"
-
-            hubs[name] = Hub(
-                name=name,
-                x=x,
-                y=y,
-                kind=kind,
-                color=meta.get("color", "none"),
-                zone_type=zone_type,
-                max_drones=int(max_drones_text),
+            start_name, end_name = _build_hub(
+                line,
+                index,
+                hubs,
+                start_name,
+                end_name,
             )
-
-            if kind == "start":
-                if start_name is not None:
-                    raise ParseError(
-                        f"line {index}: multiple start hubs declared")
-                start_name = name
-            if kind == "end":
-                if end_name is not None:
-                    raise ParseError(
-                        f"line {index}: multiple end hubs declared")
-                end_name = name
             continue
 
         if line.startswith("connection:"):
-            a, b, meta = _parse_connection_line(line, index)
-            if a not in hubs or b not in hubs:
-                raise ParseError(
-                    f"line {index}: connection uses undefined hubs")
-
-            key = tuple(sorted((a, b)))
-            if key in connections:
-                raise ParseError(
-                    f"line {index}: duplicate connection '{a}-{b}'")
-
-            max_link_text = meta.get("max_link_capacity", "1")
-            if not max_link_text.isdigit() or int(max_link_text) <= 0:
-                raise ParseError(
-                    f"line {index}: max_link_capacity"
-                    f" must be a positive integer"
-                )
-
-            connection = Connection(
-                a=a,
-                b=b,
-                max_link_capacity=int(max_link_text),
+            _build_connection(
+                line,
+                index,
+                hubs,
+                connections,
             )
-            connections[key] = connection
-            hubs[a].neighbors.append(b)
-            hubs[b].neighbors.append(a)
             continue
 
         raise ParseError(f"line {index}: unsupported syntax")
 
-    if nb_drones is None:
-        raise ParseError("missing nb_drones declaration")
-    if start_name is None:
-        raise ParseError("missing start_hub declaration")
-    if end_name is None:
-        raise ParseError("missing end_hub declaration")
+    nb_drones, start_name, end_name = _validate_required_parts(
+        nb_drones,
+        start_name,
+        end_name,
+    )
 
     return MapData(
-        nb_drones=nb_drones,
-        hubs=hubs,
-        connections=connections,
-        start_name=start_name,
-        end_name=end_name,
-        title=title,
+        nb_drones,
+        hubs,
+        connections,
+        start_name,
+        end_name,
+        title,
     )

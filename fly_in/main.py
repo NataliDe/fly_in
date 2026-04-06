@@ -46,7 +46,7 @@ def run_gui_mode(
 
                 if event.key == pygame.K_n and not simulator.is_finished():
                     simulator.step()
-                    print_turn_output(simulator, show_log=show_log)
+                    print_turn_output(simulator, show_log)
 
         simulator.update_animation(dt)
 
@@ -59,7 +59,7 @@ def run_gui_mode(
             step_cooldown += dt
             if nobody_moving and step_cooldown >= 0.08:
                 simulator.step()
-                print_turn_output(simulator, show_log=show_log)
+                print_turn_output(simulator, show_log)
                 step_cooldown = 0.0
 
         renderer.draw(simulator, running)
@@ -89,10 +89,10 @@ def main() -> None:
     simulator = Simulator(map_data)
 
     run_gui_mode(
-        simulator=simulator,
-        auto=auto,
-        show_log=show_log,
-    )
+        simulator,
+        auto,
+        show_log,
+        )
 
 
 if __name__ == "__main__":

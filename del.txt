@@ -1,0 +1,29 @@
+show_capacity = "--capacity-info" in flags
+
+І передати в run_gui_mode(...).
+
+print_turn_output
+
+Змінити на щось типу:
+
+def print_turn_output(
+    simulator: Simulator,
+    show_log: bool,
+    show_capacity: bool,
+) -> None:
+    if show_log and simulator.move_logs:
+        print(" ".join(simulator.move_logs))
+
+    if show_capacity:
+        occupancy = simulator._hub_occupancy()
+        link_load = simulator._active_link_load()
+
+        for name, hub in simulator.map_data.hubs.items():
+            cap = "∞" if hub.kind in {"start", "end"} else hub.max_drones
+            print(f"Zone {name}: {occupancy[name]}/{cap} drones")
+
+        for key, conn in simulator.map_data.connections.items():
+            print(
+                f"Connection {conn.a}-{conn.b}: "
+                f"{link_load[key]}/{conn.max_link_capacity} capacity used"
+            )

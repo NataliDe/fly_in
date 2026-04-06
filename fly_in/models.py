@@ -43,12 +43,9 @@ class Connection:
     @property
     def key(self) -> Tuple[str, str]:
         """Return a normalized tuple key for this connection."""
-        return tuple(sorted((self.a, self.b)))
-
-    def display_name(self) -> str:
-        """Return a stable text label for this connection."""
-        left, right = self.key
-        return f"{left}-{right}"
+        if self.a <= self.b:
+            return (self.a, self.b)
+        return (self.b, self.a)
 
 
 @dataclass
@@ -64,7 +61,12 @@ class MapData:
 
     def get_connection(self, a: str, b: str) -> Connection:
         """Return the connection object between two hubs."""
-        return self.connections[tuple(sorted((a, b)))]
+        key: Tuple[str, str]
+        if a <= b:
+            key = (a, b)
+        else:
+            key = (b, a)
+        return self.connections[key]
 
 
 @dataclass
@@ -95,4 +97,6 @@ class Drone:
         """Return the normalized key of the connection currently in use."""
         if self.from_hub is None or self.to_hub is None:
             return None
-        return tuple(sorted((self.from_hub, self.to_hub)))
+        if self.from_hub <= self.to_hub:
+            return (self.from_hub, self.to_hub)
+        return (self.to_hub, self.from_hub)

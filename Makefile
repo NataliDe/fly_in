@@ -1,5 +1,7 @@
 PYTHON=python3
 
+.PHONY: install run debug clean lint lint-strict
+
 install:
 	$(PYTHON) -m pip install -r requirements.txt
 

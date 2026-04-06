@@ -5,9 +5,9 @@
 ## Description
 
 This project simulates a fleet of drones moving from one start hub to one end hub through a graph of connected hubs.
-It follows the Fly-in subject requirements: object-oriented Python, strict parsing, turn-based simulation, movement costs for restricted zones, capacity checks for hubs and links, and visual feedback. The subject explicitly requires minimizing total turns, respecting zone and link capacities, handling restricted zones as 2-turn moves, and providing a visual representation. fileciteturn0file0
+It follows the Fly-in subject requirements: object-oriented Python, strict parsing, turn-based simulation, movement costs for restricted zones, capacity checks for hubs and links, and visual feedback. The subject explicitly requires minimizing total turns, respecting zone and link capacities, handling restricted zones as 2-turn moves, and providing a visual representation.
 
-The current version improves the movement logic compared with a simple greedy next-hop approach. Instead of only taking one static shortest hop and waiting when that single hop is blocked, the scheduler scores all currently available neighbors using weighted distance-to-goal, priority-zone bonus, backtracking penalty, link load, and target occupancy. This better matches the subject requirement that drones should move simultaneously, avoid unnecessary delays, distribute across multiple paths, and adapt to different topologies. fileciteturn0file0turn0file4turn0file6
+The current version improves the movement logic compared with a simple greedy next-hop approach. Instead of only taking one static shortest hop and waiting when that single hop is blocked, the scheduler scores all currently available neighbors using weighted distance-to-goal, priority-zone bonus, backtracking penalty, link load, and target occupancy. This better matches the subject requirement that drones should move simultaneously, avoid unnecessary delays, distribute across multiple paths, and adapt to different topologies. 
 
 ## Project structure
 
@@ -21,7 +21,7 @@ The current version improves the movement logic compared with a simple greedy ne
 
 ## Instructions
 
-Create a virtual environment and install dependencies:
+Create a virtual environment and install dependencies (make install):
 
 ```bash
 python3 -m venv .venv
@@ -44,7 +44,7 @@ Controls:
 
 ## Algorithm choices
 
-The subject asks for an algorithm that minimizes turns, handles simultaneous movement, respects occupancy and connection rules, and treats restricted zones as multi-turn travel. fileciteturn0file0
+The subject asks for an algorithm that minimizes turns, handles simultaneous movement, respects occupancy and connection rules, and treats restricted zones as multi-turn travel.
 
 This implementation uses these ideas:
 
@@ -61,7 +61,32 @@ This implementation uses these ideas:
    Going back to the immediately previous hub gets a penalty, so drones do not oscillate in loops unless that is really the only good move.
 
 5. **Restricted-zone transit**  
-   Entering a restricted hub takes 2 turns. During transit, the drone stays on the connection, the connection remains occupied, and the log outputs the connection name until arrival, matching the mandatory output rules. fileciteturn0file0
+   Entering a restricted hub takes 2 turns. During transit, the drone stays on the connection, the connection remains occupied, and the log outputs the connection name until arrival, matching the mandatory output rules.
+
+## Output format
+
+Each line represents one turn.
+
+- `D<ID>-<hub>` — drone arrives at a hub
+- `D<ID>-<to>` — drone is moving through a connection
+
+Stationary drones are not printed.
+
+## Example
+
+Input map:
+
+nb_drones: 2
+start_hub: start 0 0
+hub: mid 1 0
+end_hub: goal 2 0
+connection: start-mid
+connection: mid-goal
+
+Output:
+D1-mid
+D1-goal D2-mid
+D2-goal
 
 ## Visual representation
 
@@ -73,14 +98,13 @@ The subject allows colored terminal output or a graphical interface. This projec
 - drone numbers drawn on each drone
 - current turn, delivered count, and movement log
 
-That directly supports the required “visual feedback” part of the assignment. fileciteturn0file0turn0file5
-
 ## Resources
 
-- Fly-in subject PDF: `/mnt/data/fly_in.pdf`
+- Fly-in subject PDF
 - Python documentation
 - Pygame documentation
 
 ## AI usage
 
-AI was used to help reorganize the project structure, improve the scheduling logic, write cleaner README text, and package the provided maps into a ready-to-run project. The final code should still be reviewed, tested, and explained by the student.
+AI was used as a supporting tool for refactoring and structuring code.
+All core logic, algorithm design, and implementation decisions were made independently.

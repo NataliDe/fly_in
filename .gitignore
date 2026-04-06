@@ -1,0 +1,42 @@
+# 🔹 Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 🔹 Virtual environments
+venv/
+.env/
+.env.*
+
+# 🔹 Build / packaging
+build/
+dist/
+*.egg-info/
+
+# 🔹 Logs
+*.log
+
+# 🔹 OS files
+.DS_Store
+Thumbs.db
+
+# 🔹 IDE
+.vscode/
+.idea/
+
+# 🔹 Python tools
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 🔹 Pygame / runtime temp files
+*.sav
+*.tmp
+
+# 🔹 42 / project specific
+maps/*.out
+maps/*.log
+
+# 🔹 Local config
+config.local.py
