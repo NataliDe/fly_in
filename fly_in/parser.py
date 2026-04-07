@@ -126,6 +126,7 @@ def _build_hub(
     hubs: Dict[str, Hub],
     start_name: Optional[str],
     end_name: Optional[str],
+    nb_drones: int
 ) -> tuple[Optional[str], Optional[str]]:
     """Parse one hub line, validate it, and add the hub to the map state."""
     prefix, name, x_text, y_text, meta = _parse_hub_line(line, line_number)
@@ -163,7 +164,7 @@ def _build_hub(
         kind=kind,
         color=meta.get("color", "none"),
         zone_type=zone_type,
-        max_drones=int(max_drones_text),
+        max_drones=int(max_drones_text) if kind == "hub" else nb_drones,
     )
 
     if kind == "start":
@@ -264,6 +265,7 @@ def parse_map(path: str | Path) -> MapData:
                 hubs,
                 start_name,
                 end_name,
+                nb_drones
             )
             continue
 
